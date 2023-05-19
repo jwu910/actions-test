@@ -1,4 +1,5 @@
 name: Generate Release Notes
+
 on:
   push:
     tags:
@@ -7,7 +8,7 @@ on:
     inputs:
       tag:
         description: 'Tag to compare and generate release notes'
-        required: true
+        required: false
 
 jobs:
   generate-release-notes:
@@ -16,8 +17,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
-        with:
-          node-version: 16
 
       - name: Set up Node.js
         uses: actions/setup-node@v2
@@ -27,16 +26,17 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Determine Tag
+        id: tag
+        run: echo "::set-output name=tag::${{ github.event.inputs.tag || github.ref }}"
+
       - name: Generate Release Notes
         id: release-notes
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-
-          tag_to_compare=${{ github.event.inputs.tag }}
+          tag_to_compare=${{ steps.tag.outputs.tag }}
 
           # Fetch the pull requests associated with the specified tag
-          pull_requests=$(gh pr list --state merged --base main --head "refs/tags/$tag_to_compare")
+          pull_requests=$(gh pr list --state merged --base main --head "refs/tags/$tag_to_compare" --json number,title,html_url --jq '.[] | "\(.number) \(.title) \(.html_url)"')
 
           # Initialize the release notes string
           release_notes=""
@@ -70,15 +70,14 @@ jobs:
 
       - name: Create or Update Release
         uses: actions/github-script@v4
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const notes = `Release Notes:${process.env.notes}`;
             const tagName = context.ref.replace('refs/tags/', '');
             const release = context.payload.release;
             if (release) {
-              github.repos.updateRelease({
+              github.rest.repos.updateRelease({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 release_id: release.id,
@@ -86,7 +85,7 @@ jobs:
                 body: notes
               });
             } else {
-              github.repos.createRelease({
+              github.rest.repos.createRelease({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 tag_name: tagName,
