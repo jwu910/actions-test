@@ -36,7 +36,7 @@ jobs:
           tag_to_compare=${{ github.event.inputs.tag }}
 
           # Fetch the pull requests associated with the specified tag
-          pull_requests=$(gh pr list --state merged --base=main --head="refs/tags/$tag_to_compare")
+          pull_requests=$(gh pr list --state merged --base main --head "refs/tags/$tag_to_compare")
 
           # Initialize the release notes string
           release_notes=""
