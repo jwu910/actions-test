@@ -1,0 +1,60 @@
+name: Generate Release Notes
+on:
+  push:
+    tags:
+      - 'v*' # Trigger the workflow on tag creation
+
+jobs:
+  generate-release-notes:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: 14
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Generate Release Notes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Fetch the pull requests associated with the current tag
+          pull_requests=$(gh pr list --state merged --base=main --head="refs/tags/${{ github.ref }}")
+
+          # Iterate through the pull requests
+          while read -r pull_request; do
+            pr_number=$(echo "$pull_request" | awk '{print $1}')
+            pr_title=$(echo "$pull_request" | awk '{print $2}')
+            pr_url=$(echo "$pull_request" | awk '{print $3}')
+
+            # Extract issue references from the pull request body
+            issue_references=$(gh pr view "$pr_number" --json 'body' | jq -r '.body' | grep -E -o 'Fixes|Closes|Resolves #[0-9]+')
+
+            # Iterate through the issue references
+            while read -r issue_reference; do
+              issue_number=$(echo "$issue_reference" | grep -E -o '[0-9]+')
+
+              # Create the issue link
+              issue_link="https://github.com/${{ github.repository }}/issues/${issue_number}"
+
+              # Generate the release note line with the pull request and issue links
+              release_note="- [PR #$pr_number]($pr_url): $pr_title ([Issue #$issue_number]($issue_link))"
+
+              # Append the release note to your release notes file
+              echo "$release_note" >> release_notes.md
+            done <<< "$issue_references"
+          done <<< "$pull_requests"
+
+      - name: Commit and push changes
+        run: |
+          git config --local user.name "GitHub Actions"
+          git config --local user.email "actions@github.com"
+          git add release_notes.md
+          git commit -m "Update release notes"
+          git push
