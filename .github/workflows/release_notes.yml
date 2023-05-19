@@ -36,10 +36,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          tag_to_compare=${{ env.TAG }}
+          current_tag=${{ env.TAG }}
 
-          # Fetch the pull requests associated with the specified tag
-          pull_requests=$(gh pr list --state merged --base main --head "refs/tags/$tag_to_compare" --json number,title,url --jq '.[] | "\(.number) \(.title) \(.html_url)"')
+          # Get the second most recent tag
+          previous_tag=$(git describe --abbrev=0 --tags $(git rev-list --tags --skip=1 --max-count=1))
+
+          # Fetch the pull requests between the tags
+          pull_requests=$(gh pr list --state merged --base main --head "refs/tags/$previous_tag...refs/tags/$current_tag" --json number,title,url --jq '.[] | "\(.number) \(.title) \(.html_url)"')
 
           # Initialize the release notes string
           release_notes=""
