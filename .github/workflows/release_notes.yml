@@ -36,7 +36,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          tag_to_compare=${{ GITHUB_ENV.TAG }}
+          tag_to_compare=${process.env.TAG}
 
           # Fetch the pull requests associated with the specified tag
           pull_requests=$(gh pr list --state merged --base main --head "refs/tags/$tag_to_compare" --json number,title,url --jq '.[] | "\(.number) \(.title) \(.html_url)"')
