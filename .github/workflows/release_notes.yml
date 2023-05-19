@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v2
@@ -29,9 +31,7 @@ jobs:
       - name: Determine Tag
         id: tag
         run: |
-          tag=${{ github.event.inputs.tag }}
-          ifEmptyTag=$(tag || basename ${{ github.ref}})
-          echo "TAG=$ifEmptyTag" >> $GITHUB_ENV
+          echo "TAG=$(${{ github.event.inputs.tag }} || basename ${{ github.ref }})" >> $GITHUB_ENV
 
       - name: Generate Release Notes
         id: release-notes
