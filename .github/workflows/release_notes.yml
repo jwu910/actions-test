@@ -1,121 +1,22 @@
-name: Generate Release Notes
+name: Releases
 
 on:
   push:
     tags:
-      - 'v*' # Trigger the workflow on tag creation
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Tag to compare and generate release notes'
-        required: false
+    - '*'
 
 jobs:
-  generate-release-notes:
+
+  build:
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: write
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Determine Tag (Push Event)
-        id: push-tag
-        if: startsWith(github.ref, 'refs/tags/')
-        run: |
-          current_tag=$(basename ${{ github.ref }})
-          previous_tag=$(git describe --abbrev=0 --tags $(git rev-list --tags --skip=1 --max-count=1))
-          echo "CURRENT_TAG=${current_tag}" >> $GITHUB_ENV
-          echo "PREVIOUS_TAG=${previous_tag}" >> $GITHUB_ENV
-
-      - name: Determine Tag (Manual)
-        id: manual-tag
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.tag
-        run: |
-          current_tag=${{ github.event.inputs.tag }}
-          current_commit=$(git rev-parse HEAD)
-          previous_tag=$(git describe --abbrev=0 --tags $current_commit^)
-          echo "CURRENT_TAG=${current_tag}" >> $GITHUB_ENV
-          echo "PREVIOUS_TAG=${previous_tag}" >> $GITHUB_ENV
-
-      - name: Determine Tag (Fallback)
-        id: fallback-tag
-        if: github.event_name == 'workflow_dispatch' && !github.event.inputs.tag
-        run: |
-          current_tag=$(git describe --abbrev=0 --tags)
-          previous_tag=$(git describe --abbrev=0 --tags $(git rev-list --tags --skip=1 --max-count=1))
-          echo "CURRENT_TAG=${current_tag}" >> $GITHUB_ENV
-          echo "PREVIOUS_TAG=${previous_tag}" >> $GITHUB_ENV
-
-      - name: Generate Release Notes
-        id: release-notes
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          current_tag=${{ env.CURRENT_TAG }}
-          previous_tag=${{ env.PREVIOUS_TAG }}
-
-          # Fetch the pull requests between the tags
-          pull_requests=$(gh pr list --state merged --base main --head "refs/tags/$previous_tag...refs/tags/$current_tag" --json number,title,url --jq '.[] | "\(.number) \(.title) \(.html_url)"')
-
-          # Initialize the release notes string
-          release_notes=""
-
-          # Iterate through the pull requests
-          while read -r pull_request; do
-            pr_number=$(echo "$pull_request" | awk '{print $1}')
-            pr_title=$(echo "$pull_request" | awk '{print $2}')
-            pr_url=$(echo "$pull_request" | awk '{print $3}')
-
-            # Extract issue references from the pull request body
-            issue_references=$(gh pr view "$pr_number" --json 'body' | jq -r '.body' | grep -E -o 'Fixes|Closes|Resolves #[0-9]+')
-
-            # Iterate through the issue references
-            while read -r issue_reference; do
-              issue_number=$(echo "$issue_reference" | grep -E -o '[0-9]+')
-
-              # Create the issue link
-              issue_link="https://github.com/${{ github.repository }}/issues/${issue_number}"
-
-              # Generate the release note line with the pull request and issue links
-              release_note="- [PR #$pr_number]($pr_url): $pr_title ([Issue #$issue_number]($issue_link))"
-
-              # Append the release note to the release notes string
-              release_notes="$release_notes\n$release_note"
-            done <<< "$issue_references"
-          done <<< "$pull_requests"
-
-          # Write the release notes to an environment file
-          echo "RELEASE_NOTES=$release_notes" >> $GITHUB_ENV
-
-      - name: Create or Update Release
-        uses: actions/github-script@v3
-        with:
-          script: |
-            const notes = `Release Notes:${process.env.RELEASE_NOTES}`;
-            const tagName = context.ref.replace('refs/tags/', '');
-            const release = context.payload.release;
-            if (release) {
-              github.rest.repos.updateRelease({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                release_id: release.id,
-                tag_name: tagName,
-                body: notes
-              });
-            } else {
-              github.rest.repos.createRelease({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                tag_name: tagName,
-                name: tagName,
-                body: notes,
-                draft: false,
-                prerelease: false
-              });
-            }
+    - uses: actions/checkout@v3
+    - uses: ncipollo/release-action@v1
+      with:
+        token: ${github.token}
+        artifacts: "release.tar.gz,foo/*.txt"
+        bodyFile: "body.md"
+        generateReleaseNotes: true
+        makeLatest: true
