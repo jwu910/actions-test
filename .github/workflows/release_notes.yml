@@ -24,9 +24,9 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Determine Tags
-        id: tags
-        if: ${{ github.event_name == 'push' }}
+      - name: Determine Tag (Push Event)
+        id: push-tag
+        if: startsWith(github.ref, 'refs/tags/')
         run: |
           current_tag=$(basename ${{ github.ref }})
           previous_tag=$(git describe --abbrev=0 --tags $(git rev-list --tags --skip=1 --max-count=1))
@@ -34,13 +34,22 @@ jobs:
           echo "PREVIOUS_TAG=${previous_tag}" >> $GITHUB_ENV
 
       - name: Determine Tag (Manual)
-        id: tag
-        if: ${{ github.event_name == 'workflow_dispatch' }}
+        id: manual-tag
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.tag
         run: |
-          selected_tag=${{ github.event.inputs.tag }}
+          current_tag=${{ github.event.inputs.tag }}
           current_commit=$(git rev-parse HEAD)
           previous_tag=$(git describe --abbrev=0 --tags $current_commit^)
-          echo "CURRENT_TAG=${selected_tag}" >> $GITHUB_ENV
+          echo "CURRENT_TAG=${current_tag}" >> $GITHUB_ENV
+          echo "PREVIOUS_TAG=${previous_tag}" >> $GITHUB_ENV
+
+      - name: Determine Tag (Fallback)
+        id: fallback-tag
+        if: github.event_name == 'workflow_dispatch' && !github.event.inputs.tag
+        run: |
+          current_tag=$(git describe --abbrev=0 --tags)
+          previous_tag=$(git describe --abbrev=0 --tags $(git rev-list --tags --skip=1 --max-count=1))
+          echo "CURRENT_TAG=${current_tag}" >> $GITHUB_ENV
           echo "PREVIOUS_TAG=${previous_tag}" >> $GITHUB_ENV
 
       - name: Generate Release Notes
@@ -85,9 +94,8 @@ jobs:
           echo "RELEASE_NOTES=$release_notes" >> $GITHUB_ENV
 
       - name: Create or Update Release
-        uses: actions/github-script@v4
+        uses: actions/github-script@v3
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const notes = `Release Notes:${process.env.RELEASE_NOTES}`;
             const tagName = context.ref.replace('refs/tags/', '');
