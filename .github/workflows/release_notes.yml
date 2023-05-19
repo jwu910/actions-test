@@ -28,7 +28,8 @@ jobs:
 
       - name: Determine Tag
         id: tag
-        run: echo "::set-output name=tag::${{ github.event.inputs.tag || github.ref }}"
+        run: |
+          echo "TAG=${{ github.event.inputs.tag || github.ref }}" >> $GITHUB_ENV
 
       - name: Generate Release Notes
         id: release-notes
@@ -38,7 +39,7 @@ jobs:
           tag_to_compare=${{ steps.tag.outputs.tag }}
 
           # Fetch the pull requests associated with the specified tag
-          pull_requests=$(gh pr list --state merged --base main --head "refs/tags/$tag_to_compare" --json number,title,html_url --jq '.[] | "\(.number) \(.title) \(.html_url)"')
+          pull_requests=$(gh pr list --state merged --base main --head "refs/tags/$tag_to_compare" --json number,title,url --jq '.[] | "\(.number) \(.title) \(.html_url)"')
 
           # Initialize the release notes string
           release_notes=""
