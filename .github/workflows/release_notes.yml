@@ -32,6 +32,8 @@ jobs:
 
       - name: Generate Release Notes
         id: release-notes
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           tag_to_compare=${{ steps.tag.outputs.tag }}
 
@@ -65,15 +67,15 @@ jobs:
             done <<< "$issue_references"
           done <<< "$pull_requests"
 
-          # Output the release notes as a workflow variable
-          echo "::set-output name=notes::$release_notes"
+          # Write the release notes to an environment file
+          echo "RELEASE_NOTES=$release_notes" >> $GITHUB_ENV
 
       - name: Create or Update Release
         uses: actions/github-script@v4
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const notes = `Release Notes:${process.env.notes}`;
+            const notes = `Release Notes:${process.env.RELEASE_NOTES}`;
             const tagName = context.ref.replace('refs/tags/', '');
             const release = context.payload.release;
             if (release) {
