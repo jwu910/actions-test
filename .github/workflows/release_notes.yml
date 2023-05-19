@@ -31,7 +31,9 @@ jobs:
       - name: Determine Tag
         id: tag
         run: |
-          echo "TAG=$(${{ github.event.inputs.tag }} || basename ${{ github.ref }})" >> $GITHUB_ENV
+          tag=${{ github.event.inputs.tag }}
+          ifEmptyTag=$(tag || basename ${{ github.ref}})
+          echo "TAG=$ifEmptyTag" >> $GITHUB_ENV
 
       - name: Generate Release Notes
         id: release-notes
