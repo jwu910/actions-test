@@ -3,6 +3,11 @@ on:
   push:
     tags:
       - 'v*' # Trigger the workflow on tag creation
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to compare and generate release notes'
+        required: true
 
 jobs:
   generate-release-notes:
@@ -21,11 +26,15 @@ jobs:
         run: npm install
 
       - name: Generate Release Notes
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        id: release-notes
         run: |
-          # Fetch the pull requests associated with the current tag
-          pull_requests=$(gh pr list --state merged --base=main --head="refs/tags/${{ github.ref }}")
+          tag_to_compare=${{ github.event.inputs.tag }}
+
+          # Fetch the pull requests associated with the specified tag
+          pull_requests=$(gh pr list --state merged --base=main --head="refs/tags/$tag_to_compare")
+
+          # Initialize the release notes string
+          release_notes=""
 
           # Iterate through the pull requests
           while read -r pull_request; do
@@ -46,15 +55,39 @@ jobs:
               # Generate the release note line with the pull request and issue links
               release_note="- [PR #$pr_number]($pr_url): $pr_title ([Issue #$issue_number]($issue_link))"
 
-              # Append the release note to your release notes file
-              echo "$release_note" >> release_notes.md
+              # Append the release note to the release notes string
+              release_notes="$release_notes\n$release_note"
             done <<< "$issue_references"
           done <<< "$pull_requests"
 
-      - name: Commit and push changes
-        run: |
-          git config --local user.name "GitHub Actions"
-          git config --local user.email "actions@github.com"
-          git add release_notes.md
-          git commit -m "Update release notes"
-          git push
+          # Output the release notes as a workflow variable
+          echo "::set-output name=notes::$release_notes"
+
+      - name: Create or Update Release
+        uses: actions/github-script@v4
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          script: |
+            const notes = `Release Notes:${process.env.notes}`;
+            const tagName = context.ref.replace('refs/tags/', '');
+            const release = context.payload.release;
+            if (release) {
+              github.repos.updateRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: release.id,
+                tag_name: tagName,
+                body: notes
+              });
+            } else {
+              github.repos.createRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag_name: tagName,
+                name: tagName,
+                body: notes,
+                draft: false,
+                prerelease: false
+              });
+            }
