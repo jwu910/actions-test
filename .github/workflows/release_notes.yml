@@ -17,8 +17,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
-        with:
-          ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v3
@@ -26,22 +24,32 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Determine Tag
-        id: tag
+      - name: Determine Tags
+        id: tags
+        if: ${{ github.event_name == 'push' }}
         run: |
-          tag=${{ github.event.inputs.tag }}
-          ifEmptyTag=$(tag || basename ${{ github.ref}})
-          echo "TAG=$ifEmptyTag" >> $GITHUB_ENV
+          current_tag=basename ${{ github.ref }}
+          previous_tag=$(git describe --abbrev=0 --tags $(git rev-list --tags --skip=1 --max-count=1))
+          echo "CURRENT_TAG=${current_tag}" >> $GITHUB_ENV
+          echo "PREVIOUS_TAG=${previous_tag}" >> $GITHUB_ENV
+
+      - name: Determine Tag (Manual)
+        id: tag
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          selected_tag=${{ github.event.inputs.tag }}
+          current_commit=$(git rev-parse HEAD)
+          previous_tag=$(git describe --abbrev=0 --tags $current_commit^)
+          echo "CURRENT_TAG=${selected_tag}" >> $GITHUB_ENV
+          echo "PREVIOUS_TAG=${previous_tag}" >> $GITHUB_ENV
 
       - name: Generate Release Notes
         id: release-notes
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          current_tag=${{ env.TAG }}
-
-          # Get the second most recent tag
-          previous_tag=$(git describe --abbrev=0 --tags $(git rev-list --tags --skip=1 --max-count=1))
+          current_tag=${{ env.CURRENT_TAG }}
+          previous_tag=${{ env.PREVIOUS_TAG }}
 
           # Fetch the pull requests between the tags
           pull_requests=$(gh pr list --state merged --base main --head "refs/tags/$previous_tag...refs/tags/$current_tag" --json number,title,url --jq '.[] | "\(.number) \(.title) \(.html_url)"')
