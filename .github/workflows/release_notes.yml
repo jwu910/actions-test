@@ -27,7 +27,10 @@ jobs:
 
       - name: Generate Release Notes
         id: release-notes
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+
           tag_to_compare=${{ github.event.inputs.tag }}
 
           # Fetch the pull requests associated with the specified tag
