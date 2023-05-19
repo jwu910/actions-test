@@ -16,7 +16,7 @@ jobs:
     - uses: ncipollo/release-action@v1
       with:
         token: ${{github.token}}
-        artifacts: "release.tar.gz,foo/*.txt"
         bodyFile: "body.md"
+        draft: true
         generateReleaseNotes: true
         makeLatest: true
